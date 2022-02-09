@@ -10,11 +10,12 @@ while (True):
     if len(cmnds) == 0:
         continue
     # Exit command is correctly typed and executed
-    elif len(cmnds) == 1 and cmnds[0] == "exit":
+    elif cmnds[0] == "exit":
         print("\tProgram terminated with exit command")
         sys.exit(0)
     # Change directory is correctly typed and executed
     elif cmnds[0] == "cd":
+        # TODO - Function out of this part
         if len(cmnds) == 2:
             try:
                 os.chdir(cmnds[1])
@@ -25,18 +26,26 @@ while (True):
     # We try to execute a command
     else:
         child = os.fork()
+        # If forks fails, we exit
         if (child < 0):
-            os.write(2, ("Fork failed, returning %d\n" % child).enconde())
+            os.write(2, ("\tFork failed, returning %d\n" % child).encode())
             sys.exit(1)
+        # Child tries to execute the command(s)
         elif (child == 0):
+            # Try each directory in path
             for dir in re.split(":", os.environ['PATH']):
                 program = "%s/%s" % (dir, cmnds[0])
                 try:
                     os.execve(program, cmnds, os.environ)
+                # Pass quietly to next attempt
                 except FileNotFoundError:
                     pass
-            os.write(2, ("Child could not execute %s\n" % cmnds[0]).encode())
-            sys.exit(1)
+            # If target file or directory was not found, we exit
+            os.write(2, (f'\t{cmnds[0]}: command not found\n').encode())
+            sys.exit(3)
         else:
-            os.wait()
-            os.write(1, ("Parent here\n").encode())
+            childPidCode = os.wait()[1] >> 8
+            if (childPidCode == 0 or childPidCode == 3):
+                pass
+            else:
+                os.write(2, (f'\tProgram terminated with exit code {childPidCode}\n').encode())
