@@ -11,10 +11,12 @@ def change_dir(cmnds):
 
 # Handles redirection
 def redirect(cmnds, idx):
+    # Open file (or create it) to write result of command
     if cmnds[idx] == '>':
         os.close(1)
         os.open(cmnds[idx+1], os.O_CREAT | os.O_WRONLY)
         os.set_inheritable(1, True)
+    # Open file to read contents
     else:
         os.close(0)
         os.open(cmnds[idx+1], os.O_RDONLY)
@@ -41,6 +43,12 @@ while (True):
             print("\tcd accepts only one argument")
         continue
 
+    # Raise flag if background task
+    background = False
+    if cmnds[len(cmnds)-1] == '&':
+        background = True
+        del cmnds[len(cmnds)-1]
+
     # We try to execute a command
     child = os.fork()
     # If forks fails, we exit
@@ -50,6 +58,7 @@ while (True):
 
     # Child tries to execute the command(s)
     elif (child == 0):
+        # Looking for redirection
         for idx in range(len(cmnds)):
             if (cmnds[idx] == '>' or cmnds[idx] == '<') and idx+2 <= len(cmnds):
                 redirect(cmnds, idx)
@@ -71,9 +80,11 @@ while (True):
         sys.exit(3)
 
     else:
-        childPidCode = os.wait()[1] >> 8
-        # Code 0 = No error, Code 3 = Error was detected before
-        if (childPidCode == 0 or childPidCode == 3):
-            pass
-        else:
-            os.write(2, (f'\tProgram terminated with exit code {childPidCode}\n').encode())
+        # If foreground, we wait for the child
+        if not background:
+            childPidCode = os.wait()[1] >> 8
+            # Code 0 = No error, Code 3 = Error was detected before
+            if (childPidCode == 0 or childPidCode == 3):
+                pass
+            else:
+                os.write(2, (f'\tProgram terminated with exit code {childPidCode}\n').encode())
