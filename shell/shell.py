@@ -7,7 +7,7 @@ def change_dir(cmnds):
     try:
         os.chdir(cmnds[1])
     except FileNotFoundError:
-        print(f'\tNo such directory {cmnds[1]}')
+        os.write(2, (f'\tNo such directory {cmnds[1]}\n').encode())
 
 # Handles redirection
 def redirect(cmnds, idx):
@@ -22,17 +22,34 @@ def redirect(cmnds, idx):
         os.open(cmnds[idx+1], os.O_RDONLY)
         os.set_inheritable(0, True)
 
+# Attempt to execute command, exit if it fails
+def execute_command(cmnds):
+    # Try each directory in path
+    for dir in re.split(":", os.environ['PATH']):
+        program = "%s/%s" % (dir, cmnds[0])
+        try:
+            os.execve(program, cmnds, os.environ)
+        # Pass quietly to next attempt
+        except FileNotFoundError:
+            pass
+
+    # If target file or directory was not found, we exit
+    os.write(2, (f'\t{cmnds[0]}: command not found\n').encode())
+    sys.exit(3)
+
 # Program will run until exit command
 while (True):
-    cmnds = input(f'{os.getcwd()} $ ').split()
+    
+    os.write(1, (f'{os.getcwd()} $ ').encode())
+    cmnds = os.read(0, 100).decode().split()
 
     # No input, repeat
     if len(cmnds) == 0:
-        continue
+        break;
     
     # Exit command is executed
     if cmnds[0] == "exit":
-        print("\tProgram terminated with exit command")
+        os.write(2, ("\tProgram terminated with exit command\n").encode())
         sys.exit(0)
     
     # Change directory is correctly typed and executed
@@ -40,7 +57,7 @@ while (True):
         if len(cmnds) == 2:
             change_dir(cmnds)
         else:
-            print("\tcd accepts only one argument")
+            os.write(2, ("\tcd accepts only one argument\n").encode())
         continue
 
     # Raise flag if background task
@@ -65,19 +82,10 @@ while (True):
                 del cmnds[idx+1]
                 del cmnds[idx]
                 break
-                
-        # Try each directory in path
-        for dir in re.split(":", os.environ['PATH']):
-            program = "%s/%s" % (dir, cmnds[0])
-            try:
-                os.execve(program, cmnds, os.environ)
-            # Pass quietly to next attempt
-            except FileNotFoundError:
+            elif (cmnds[idx] == '|' and idx+2 <= len(cmnds)):
                 pass
-
-        # If target file or directory was not found, we exit
-        os.write(2, (f'\t{cmnds[0]}: command not found\n').encode())
-        sys.exit(3)
+                
+        execute_command(cmnds)
 
     else:
         # If foreground, we wait for the child
