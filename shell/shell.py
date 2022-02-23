@@ -43,6 +43,34 @@ def execute_command(cmnds):
     os.write(2, (f'\t{cmnds[0]}: command not found\n').encode())
     sys.exit(3)
 
+def use_pipes(cmnds, idx):
+    # Create pipe and sides for writing and reading
+    toPipe, fromPipe = os.pipe()
+    os.set_inheritable(toPipe, True)
+    os.set_inheritable(fromPipe, True)
+    left_cmnd = cmnds[0:idx]
+    right_cmnd = cmnds[idx+1:]
+    
+    child = os.fork()
+    if child < 0:
+        os.write(2, ("\tFork failed, returning %d\n" % child).encode())
+        sys.exit(3)
+    # Writing to pipe
+    elif child == 0:
+        os.close(1)
+        os.dup(fromPipe)
+        os.set_inheritable(1, True)
+        execute_command(left_cmnd)
+    # Reading from pipe
+    else:
+        os.close(0)
+        os.dup(toPipe)
+        os.set_inheritable(0, True)
+        os.wait()
+        os.close(fromPipe)
+        os.close(toPipe)
+        execute_command(right_cmnd)
+
 def main():
     # Program will run until exit command
     while (True):
@@ -78,7 +106,7 @@ def main():
         # If forks fails, we exit
         if (child < 0):
             os.write(2, ("\tFork failed, returning %d\n" % child).encode())
-            sys.exit(1)
+            sys.exit(3)
 
         # Child tries to execute the command(s)
         elif (child == 0):
@@ -88,7 +116,8 @@ def main():
             elif '<' in cmnds:
                 redirect(cmnds, cmnds.index('<'))
             elif '|' in cmnds:
-                pass
+                use_pipes(cmnds, cmnds.index('|'))
+                sys.exit(0)
             else:
                 execute_command(cmnds)
 
